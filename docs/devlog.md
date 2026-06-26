@@ -63,7 +63,7 @@
   no PnL/equity-curve simulation behind it).
 - FastAPI endpoint, Dockerfile, docker-compose.
 
-## 2026-06-25 (session 2)
+## 2026-06-26 (session 2 — engine, metrics, pairs, walk-forward, API)
 
 ### Built
 
@@ -118,3 +118,40 @@
 - Caching/storage layer (Parquet/DuckDB) so runs don't re-fetch from yfinance.
 - Address survivorship bias / point-in-time data for honest long backtests.
 - Richer position sizing (volatility targeting) and a calibrated cost model.
+
+## 2026-06-26 (session 3 — CI/CD & type checking)
+
+### Built
+
+- Full CI/CD pipeline. CI (`.github/workflows/ci.yml`) now also runs `mypy`
+  (added a `src/backtester/py.typed` marker so the package is actually
+  type-checked). CD (`.github/workflows/cd.yml`) builds the Docker image,
+  smoke-tests that the container answers `/health`, then publishes it to GHCR
+  (GitHub Container Registry) on push to `main`, on `v*` tags, or via manual
+  dispatch from the Actions tab.
+- Verified the whole chain locally before committing: `docker build` succeeds,
+  the running container returns `{"status":"ok"}` from `/health`, and `mypy` is
+  clean across all 15 source files (76 tests still green, ruff clean).
+- Committed `docs/ideas.md` (research notes: Monte Carlo, parameter sensitivity,
+  walk-forward, overfitting controls, log returns, public-strategy edge sources).
+
+### Learned
+
+- "Full CI/CD" = CI (lint + type-check + test on every PR) **plus** CD (build a
+  versioned container artifact, prove it boots, publish it). Publishing to GHCR
+  needs no external secrets — the built-in `GITHUB_TOKEN` has `packages: write`.
+- A type checker only helps if it actually runs: a library needs a `py.typed`
+  marker (PEP 561) or tools skip it ("missing py.typed marker").
+- A CD **smoke test** (boot the image, curl `/health`) catches what unit tests
+  can't — a broken Dockerfile or start command.
+
+### Problems
+
+- `mypy` initially type-checked *nothing* ("missing py.typed marker"); fixed by
+  adding the marker. No live deployment *target* (Fly/Render/AWS) is wired up:
+  CD publishes a runnable image, but pointing a host at it is a manual step.
+
+### Next
+
+- Point a host (Fly.io / Render) at the GHCR image for a live URL.
+- Parameter-sensitivity sweep + Monte Carlo resampling — see [[ideas.md]].

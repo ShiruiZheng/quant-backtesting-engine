@@ -72,11 +72,19 @@ docker compose up --build      # serves the API on http://127.0.0.1:8000
 The image installs the exact locked dependencies (`uv sync --locked --no-dev`),
 so it builds the same environment CI tests against.
 
-## CI
+## CI/CD
 
-`.github/workflows/ci.yml` runs on every push to `main` and every PR: installs
-the pinned Python + locked deps via `uv sync --extra dev --locked` (fails if
-`uv.lock` is out of date), then `ruff check .` and `pytest -q`.
+**CI** — `.github/workflows/ci.yml` runs on every push to `main` and every PR:
+installs the pinned Python + locked deps via `uv sync --extra dev --locked`
+(fails if `uv.lock` is out of date), then `ruff check .`, `mypy`, and `pytest -q`.
+
+**CD** — `.github/workflows/cd.yml` runs on push to `main`, on `v*` tags, or via
+manual dispatch: it builds the Docker image, smoke-tests that the container
+answers `/health`, then publishes it to the GitHub Container Registry at
+`ghcr.io/<owner>/quant-backtesting-engine` (no external secrets — it uses the
+built-in `GITHUB_TOKEN`). Tag a release with `git tag v0.1.0 && git push origin
+v0.1.0` to get a semver-tagged image. Deploying that image to a live host is a
+documented manual step.
 
 ## Branching
 

@@ -16,6 +16,7 @@ Day to day, prefix commands with `uv run` instead of activating the venv:
 ```bash
 uv run pytest -q                         # tests (no network: yfinance is mocked)
 uv run ruff check .                      # lint
+uv run mypy                              # type-check (needs src/backtester/py.typed)
 uv run python scripts/run_demo.py        # end-to-end demo (hits live yfinance)
 uv run uvicorn backtester.api.app:app --reload   # the HTTP API + /docs
 ```
@@ -41,7 +42,7 @@ Short imperative subject (optionally `<type>: ` prefixed, matching the branch),
 then a body explaining *what changed and why* when it isn't obvious. Group
 related changes into one commit rather than one commit per file.
 
-## Pull requests + CI
+## Pull requests + CI/CD
 
 ```bash
 git checkout -b feat/<name>
@@ -50,11 +51,22 @@ git push -u origin feat/<name>
 gh pr create        # or open the PR in the GitHub UI
 ```
 
-`.github/workflows/ci.yml` runs on every PR (and push to `main`): it installs
-the locked deps with `uv sync --extra dev --locked` (fails if `uv.lock` is
-stale), then `ruff check .`, then `pytest -q`. Get CI green before merging.
-Before pushing, run `uv run ruff check .` and `uv run pytest -q` locally so the
-PR is green on the first try.
+**CI** (`.github/workflows/ci.yml`) runs on every PR (and push to `main`): it
+installs the locked deps with `uv sync --extra dev --locked` (fails if `uv.lock`
+is stale), then `ruff check .`, then `mypy`, then `pytest -q`. Get CI green
+before merging. Run those three locally first so the PR is green on the first try.
+
+**CD** (`.github/workflows/cd.yml`) runs on push to `main`, on `v*` tags, or via
+manual dispatch: it builds the Docker image, smoke-tests that the container
+answers `/health`, and publishes it to GHCR
+(`ghcr.io/<owner>/quant-backtesting-engine`). Cut a release by tagging:
+
+```bash
+git tag v0.1.0 && git push origin v0.1.0     # -> semver-tagged image on GHCR
+```
+
+Deploying that image to a live host (Fly.io, Render, etc.) is a manual step;
+the pipeline's job is to always have a known-good, runnable image published.
 
 ## Keep the docs current
 

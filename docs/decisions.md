@@ -138,6 +138,21 @@ uses the official `ghcr.io/astral-sh/uv` image and `uv sync --locked --no-dev`
 so the container builds the exact environment CI tests against. The API test
 monkeypatches `load_prices` to stay no-network like the rest of the suite.
 
+## Full CI/CD: type-check in CI, publish a smoke-tested image in CD
+
+CI gained a `mypy` step, plus a `src/backtester/py.typed` marker — without the
+marker mypy skips the package entirely ("cannot be type checked due to missing
+py.typed marker"), so the step would be a no-op. CD is a separate workflow
+(`.github/workflows/cd.yml`) that builds the Docker image, **boots it and checks
+`/health` before publishing** — a broken Dockerfile or start command fails the
+pipeline rather than reaching users — then pushes to GHCR. GHCR was chosen over
+Docker Hub because the built-in `GITHUB_TOKEN` can push to it with
+`packages: write`, so there are no external secrets to manage for an educational
+repo. CD triggers on `main`, on `v*` tags (semver-tagged images), and
+`workflow_dispatch` so it can be exercised from a feature branch before merging.
+Deploying the published image to a live host is left as a documented manual step
+— no hosting provider or credentials are assumed in the repo.
+
 ## ruff + pytest, configured in `pyproject.toml`
 
 Both configured under `[tool.pytest.ini_options]` and `[tool.ruff]` rather
