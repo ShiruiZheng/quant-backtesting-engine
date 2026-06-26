@@ -1,0 +1,7 @@
+services:
+  api:
+    build: .
+    image: quant-backtesting-engine
+    ports:
+      - "8000:8000"
+    # Override the default start date etc. via the request body, not env vars.
