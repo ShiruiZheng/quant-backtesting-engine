@@ -14,6 +14,7 @@ then open http://127.0.0.1:8000/docs for the interactive Swagger UI.
 from __future__ import annotations
 
 import math
+import os
 from datetime import date
 
 from fastapi import FastAPI, HTTPException
@@ -22,6 +23,7 @@ from pydantic import BaseModel, Field
 from backtester.core.costs import CostModel
 from backtester.core.engine import run_backtest
 from backtester.data.loader import load_prices
+from backtester.data.sources import CachedPriceSource, PriceSource, YFinanceSource
 from backtester.signals.momentum import momentum_positions
 
 app = FastAPI(
@@ -29,6 +31,22 @@ app = FastAPI(
     version="0.1.0",
     description="Vectorized momentum backtest over yfinance data (educational/research use only).",
 )
+
+_CACHE_PATH = os.environ.get("BACKTESTER_CACHE_PATH", "prices_cache.duckdb")
+_source: PriceSource | None = None
+
+
+def _get_source() -> PriceSource:
+    """Lazily build a DuckDB-cached yfinance source shared across requests.
+
+    Caching at the service level means repeated /backtest calls for overlapping
+    date ranges don't re-hit yfinance -- faster, and resilient to its rate limits.
+    Built lazily so importing this module has no filesystem side effects.
+    """
+    global _source
+    if _source is None:
+        _source = CachedPriceSource(YFinanceSource(), _CACHE_PATH)
+    return _source
 
 
 class BacktestRequest(BaseModel):
@@ -77,6 +95,7 @@ def backtest(request: BacktestRequest) -> BacktestResponse:
             start=request.start.isoformat(),
             end=request.end.isoformat() if request.end else None,
             asx=request.asx,
+            source=_get_source(),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

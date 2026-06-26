@@ -155,3 +155,50 @@
 
 - Point a host (Fly.io / Render) at the GHCR image for a live URL.
 - Parameter-sensitivity sweep + Monte Carlo resampling — see [[ideas.md]].
+
+## 2026-06-26 (session 4 — PriceSource interface + DuckDB cache)
+
+### Built
+
+- `data/sources.py`: a `PriceSource` Protocol with two implementations —
+  `YFinanceSource` (live) and `CachedPriceSource` (DuckDB-backed). This removes
+  the one real coupling smell (everything was wired straight to yfinance).
+- Refactored `data/loader.py`: `load_prices` now delegates fetching to a
+  `PriceSource` (new optional `source=` arg, defaults to `YFinanceSource`) and
+  keeps only ticker-name resolution + the single forward-fill. Same public
+  signature, nothing downstream changed.
+- Wired the cache in: the demo caches at `.cache/prices.duckdb` (`--no-cache`
+  to disable); the API uses a lazily-built cached source shared across requests
+  (`$BACKTESTER_CACHE_PATH`).
+- Added `duckdb` dependency (via `uv add`, so pyproject + uv.lock stay in sync).
+- Tests: new `tests/test_cache.py` (serves-from-cache, persistence across
+  instances, sub-range hit, range-extension fetch, unknown-ticker raise);
+  updated `tests/test_loader.py` to patch yfinance in its new home
+  (`sources.yf`). 83 tests pass; ruff + mypy clean.
+
+### Learned
+
+- **Dependency inversion**: depend on a small interface (`PriceSource`), not on
+  yfinance/DuckDB. The cache then drops in as another implementation instead of
+  forcing a rewrite — the payoff of the abstraction.
+- An interface earns its keep at **two** implementations; adding one
+  speculatively is just indirection. Built it alongside the cache for that reason.
+- **ffill is range-dependent**, so the cache stores *raw* closes and lets
+  `load_prices` forward-fill once — otherwise a cached sub-range could differ
+  from a freshly-fetched one.
+- Measured win: a warm cache served a year of 2-ticker data in ~0.002s vs ~1.1s
+  cold (~600x), identical values — and zero yfinance calls (the reliability win).
+
+### Problems
+
+- DuckDB's DATE round-trip changes the index datetime *resolution* (us/ns); it's
+  irrelevant to numeric work, so the cache-vs-upstream equality test compares
+  with `check_index_type=False`.
+- Lazy DuckDB connection (open on first use, not in `__init__`) was needed so
+  importing the API / constructing the source creates no stray cache file —
+  keeps the no-network test suite clean.
+
+### Next
+
+- `PriceSource` for delisted tickers / point-in-time data (kills survivorship bias).
+- Parameter-sensitivity sweep + Monte Carlo resampling — see [[ideas.md]].

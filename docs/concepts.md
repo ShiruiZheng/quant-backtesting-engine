@@ -70,6 +70,30 @@ in time. Interpolation (e.g. linear) can use a *future* value to estimate a
 past gap — which is itself a (subtle) form of lookahead bias. The loader
 forward-fills for this reason.
 
+## Dependency inversion (the `PriceSource` interface)
+
+Instead of `load_prices` (and the API) calling yfinance directly, they depend on
+a small **interface** — `PriceSource`, "give me closes for these tickers over
+this range" (`backtester.data.sources`). yfinance is just *one* implementation
+(`YFinanceSource`); the cache is another (`CachedPriceSource`). High-level code
+depends on the abstraction, not the concrete library. This is "dependency
+inversion": you can swap or wrap the data source (cache it, point it at a CSV or
+a database, fake it in tests) without touching anything downstream. It's what
+makes the price cache a drop-in rather than a rewrite — see [[decisions.md]].
+
+## Caching / the data layer
+
+A **cache** is a fast, disposable layer that avoids repeating expensive work —
+here, re-downloading the same prices from yfinance on every run. `CachedPriceSource`
+wraps another source with a DuckDB file: it serves a date range from the local
+store if it has been fetched before, and only calls upstream for the missing
+span. Wins: re-runs are near-instant, the app is far less exposed to yfinance
+rate limits/outages (a reliability gain), and results are reproducible. The store
+holds *raw* (un-filled) closes so a cached range slices correctly; alignment and
+forward-fill are applied once, downstream, by `load_prices`. A file-based store
+like DuckDB needs no extra service/container; a *server* cache (Redis/Postgres)
+would only be warranted once multiple app instances must share state.
+
 ## Equity curve / PnL simulation
 
 The thing a "backtest engine" actually produces: starting from some capital,
@@ -154,12 +178,14 @@ walk-forward metrics is the clearest signal of overfitting this project has.
 
 Honest list of what a research-grade engine has that this one still doesn't:
 
-- **Caching / storage layer**: persist fetched prices (Parquet/DuckDB) instead
-  of re-hitting yfinance every run.
 - **Survivorship bias**: yfinance only serves still-listed names, so backtests
   here quietly overstate returns by ignoring delisted companies.
 - **Point-in-time data**: using only what was actually known on each date (no
   later-revised fundamentals leaking back).
 - **Calibrated market impact / portfolio optimization / multi-factor models**:
   the cost model and position sizing are deliberately simple. See the answer in
-  [[devlog.md]] (2026-06-25 session 2) for the fuller roadmap.
+  [[devlog.md]] (2026-06-26 session 2) for the fuller roadmap.
+
+A local **caching / storage layer** (DuckDB) now exists — see the "Caching"
+concept above; what's left there is a *point-in-time* store (above) and pulling
+delisted tickers to kill survivorship bias.

@@ -8,7 +8,8 @@ Educational/research project — not for live trading.
 
 ```
 src/backtester/
-  data/        # loader.py: fetches prices from yfinance (US by default; .AX for ASX, gap-fill)
+  data/        # sources.py: PriceSource interface -> YFinanceSource (live) + CachedPriceSource (DuckDB)
+               # loader.py:  load_prices (ticker-name resolution, alignment, forward-fill)
   core/        # returns.py: simple/log/cumulative returns
                # costs.py:   CostModel (fixed fee, bps, slippage, market impact; + weight-space costs)
                # engine.py:  run_backtest -> positions x returns - costs -> equity curve (BacktestResult)
@@ -46,8 +47,18 @@ uv run python scripts/run_demo.py --asx --tickers BHP CBA CSL     # ASX instead 
 prices (use `--asx` for Australian listings), then runs, in order:
 the momentum **next-day target positions**, a full **backtest** (equity curve +
 metrics), **walk-forward** out-of-sample metrics, and an **Engle-Granger pairs**
-fit + backtest on the first two tickers. There's no caching/storage layer yet —
-every run re-fetches from yfinance.
+fit + backtest on the first two tickers. Prices are cached in a local DuckDB file
+(`.cache/prices.duckdb`), so re-running the same range is near-instant and avoids
+re-downloading; pass `--no-cache` to always hit yfinance.
+
+### Caching (data layer)
+
+`load_prices` fetches through a `PriceSource` (`backtester.data.sources`):
+`YFinanceSource` for live data, or `CachedPriceSource` which wraps it with a
+DuckDB store and only downloads date ranges it hasn't seen. The API uses a
+shared cache at `$BACKTESTER_CACHE_PATH` (default `prices_cache.duckdb`) so
+repeated requests don't re-hit yfinance. Cache files are gitignored and can be
+deleted anytime — they regenerate on demand.
 
 ## Run the API
 

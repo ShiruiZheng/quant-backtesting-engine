@@ -70,7 +70,7 @@ def test_backtest_passes_iso_dates_to_loader(
 ) -> None:
     captured: dict[str, object] = {}
 
-    def capturing_loader(tickers, start, end=None, asx=False):  # type: ignore[no-untyped-def]
+    def capturing_loader(tickers, start, end=None, asx=False, source=None):  # type: ignore[no-untyped-def]
         captured["start"] = start
         captured["end"] = end
         return fake_prices

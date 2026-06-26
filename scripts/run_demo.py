@@ -26,6 +26,7 @@ import pandas as pd
 from backtester.core.costs import CostModel
 from backtester.core.engine import run_backtest
 from backtester.data.loader import load_prices
+from backtester.data.sources import CachedPriceSource, PriceSource, YFinanceSource
 from backtester.signals.momentum import momentum_positions
 from backtester.signals.pairs import engle_granger, pairs_positions
 from backtester.validation.walkforward import walk_forward
@@ -49,12 +50,24 @@ def main() -> None:
     parser.add_argument(
         "--asx", action="store_true", help="Treat tickers as ASX-listed (append .AX)."
     )
+    parser.add_argument(
+        "--cache",
+        default=".cache/prices.duckdb",
+        help="DuckDB cache path; re-runs read from here instead of re-downloading.",
+    )
+    parser.add_argument(
+        "--no-cache", action="store_true", help="Bypass the cache and always hit yfinance."
+    )
     args = parser.parse_args()
 
     cost_model = CostModel(fixed_fee=0.0, proportional_bps=5.0, slippage_bps=2.0)
 
-    # 1. Load prices ---------------------------------------------------------
-    prices = load_prices(args.tickers, start=args.start, end=args.end, asx=args.asx)
+    # 1. Load prices (cached unless --no-cache) ------------------------------
+    source: PriceSource = YFinanceSource()
+    if not args.no_cache:
+        source = CachedPriceSource(YFinanceSource(), args.cache)
+        print(f"Using price cache at {args.cache} (re-runs of the same range are instant).")
+    prices = load_prices(args.tickers, start=args.start, end=args.end, asx=args.asx, source=source)
     n_assets = prices.shape[1]
     print(f"Loaded {prices.shape[0]} rows x {n_assets} tickers: {list(prices.columns)}")
     print("\nLast 3 rows of prices:")

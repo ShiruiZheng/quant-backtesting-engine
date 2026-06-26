@@ -17,6 +17,7 @@ dependencies = [
     "fastapi>=0.111",
     "uvicorn[standard]>=0.30",
     "pydantic>=2.7",
+    "duckdb>=1.5.4",
 ]
 
 [project.optional-dependencies]

@@ -138,6 +138,37 @@ uses the official `ghcr.io/astral-sh/uv` image and `uv sync --locked --no-dev`
 so the container builds the exact environment CI tests against. The API test
 monkeypatches `load_prices` to stay no-network like the rest of the suite.
 
+## Prices behind a `PriceSource` interface, with a DuckDB cache
+
+`load_prices` and the API no longer call yfinance directly — they depend on a
+`PriceSource` Protocol (`backtester.data.sources`), with `YFinanceSource` (live)
+and `CachedPriceSource` (DuckDB-backed) as implementations. Reasons: (1) the data
+source was the one real coupling smell — everything was wired to yfinance, so
+adding a cache or swapping providers meant editing the loader; the interface
+makes it a drop-in. (2) It enables a price cache, the highest-leverage reliability
+win, since re-fetching from yfinance on every run/request is slow and rate-limit
+prone. The interface was introduced *with* a second implementation (the cache),
+not speculatively — an interface earns its keep at two implementations, not one.
+
+`load_prices` keeps its old signature and just gains an optional `source=`
+(defaults to `YFinanceSource`), so nothing downstream breaks. Layering:
+**sources return raw closes; `load_prices` owns ticker-name resolution + the
+single forward-fill.** Keeping forward-fill out of the cache matters — ffill is
+range-dependent, so the cache stores raw, range-independent closes and slices
+are always correct.
+
+Cache design (educational, deliberately simple): DuckDB file, coverage tracked
+per `(ticker, field)` as one contiguous fetched span. A request inside the span
+is served locally; a request that extends it fetches the *union* span (gaps
+included, so the store never claims data it doesn't have). DuckDB over
+SQLite/Parquet because it's columnar (good for price series), single-file (no
+server/second container), and SQL-queryable. The connection opens lazily so
+importing the module and constructing the source have no filesystem side effects
+(keeps tests/imports clean). The demo caches at `.cache/prices.duckdb`
+(`--no-cache` to disable); the API caches at `$BACKTESTER_CACHE_PATH` shared
+across requests. A *server* cache (Redis/Postgres, i.e. a second container) is
+intentionally deferred until multiple instances need shared state.
+
 ## Full CI/CD: type-check in CI, publish a smoke-tested image in CD
 
 CI gained a `mypy` step, plus a `src/backtester/py.typed` marker — without the

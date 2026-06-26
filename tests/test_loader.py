@@ -3,7 +3,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from backtester.data import loader
+from backtester.data import sources
 from backtester.data.loader import load_prices, to_asx_ticker
 
 
@@ -21,7 +21,9 @@ class FakeTicker:
 
 @pytest.fixture(autouse=True)
 def fake_yfinance(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(loader.yf, "Ticker", FakeTicker)
+    # yfinance now lives in the YFinanceSource (backtester.data.sources); load_prices
+    # delegates to it, so patching here makes the default source return canned data.
+    monkeypatch.setattr(sources.yf, "Ticker", FakeTicker)
 
 
 def _set_history(symbol: str, dates: list[str], closes: list[float]) -> None:
