@@ -43,6 +43,11 @@ htmlcov/
 .coverage
 .coverage.*
 .cache
+
+# DuckDB price cache (data layer; regenerated on demand)
+*.duckdb
+*.duckdb.wal
+prices_cache.duckdb
 nosetests.xml
 coverage.xml
 *.cover
