@@ -2,7 +2,7 @@
 
 Vectorized Python backtesting engine for ASX equities with transaction costs, walk-forward validation, risk metrics, FastAPI, Docker, and CI.
 
-Educational/research project — not for live trading.
+Educational project, not for live trading.
 
 ## Project layout
 
@@ -24,7 +24,7 @@ docs/          # devlog.md, concepts.md, decisions.md
 Dockerfile, docker-compose.yml   # containerized API
 ```
 
-The pipeline is now end-to-end: fetch prices -> build a lagged signal
+The pipeline is end-to-end: fetch prices -> build a lagged signal
 (momentum or pairs) -> simulate it into an **equity curve** with transaction
 costs -> score it with **risk/performance metrics** -> stress it with
 **walk-forward** out-of-sample validation -> optionally serve it over **HTTP**.
